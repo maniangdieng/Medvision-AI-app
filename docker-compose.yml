@@ -1,0 +1,59 @@
+# Lance PostgreSQL + API NestJS + interface Next.js sur n'importe quel PC.
+# Le service IA, lui, tourne dans Colab (voir ai-service/).
+#   1. cp .env.example .env   puis remplir les valeurs
+#   2. docker compose up -d --build
+#   3. docker compose exec backend npm run seed     (premier administrateur)
+#   4. ouvrir http://localhost:3000
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: medvision
+      POSTGRES_USER: medvision
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Définir DB_PASSWORD dans .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medvision"]
+      interval: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://medvision:${DB_PASSWORD}@db:5432/medvision
+      DB_SYNC: "true"
+      JWT_SECRET: ${JWT_SECRET:?Définir JWT_SECRET dans .env}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      AI_SERVICE_URL: ${AI_SERVICE_URL}
+      AI_API_KEY: ${AI_API_KEY:?Définir AI_API_KEY dans .env}
+      AI_TIMEOUT_MIN: ${AI_TIMEOUT_MIN:-10}
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-MedVision}
+      APP_URL: ${APP_URL:-}
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        BACKEND_URL: http://backend:4000
+    restart: unless-stopped
+    depends_on: [backend]
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:
+  uploads:

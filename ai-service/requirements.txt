@@ -1,0 +1,16 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+open_clip_torch>=2.23.0
+timm
+transformers>=4.50.0
+accelerate
+huggingface_hub
+pillow
+nibabel
+numpy
+torch
+pydicom>=3.0
+pylibjpeg
+pylibjpeg-libjpeg
+pylibjpeg-openjpeg
