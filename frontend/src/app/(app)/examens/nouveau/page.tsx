@@ -9,7 +9,7 @@ import { Alerte, Bouton, Spinner, Squelette } from '@/components/ui';
 import { api, envoyer } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { MODALITES, REGIONS, taille } from '@/lib/format';
-import type { Patient } from '@/lib/types';
+import type { Patient, Prescripteur } from '@/lib/types';
 
 const ACCEPTE = ['.png', '.jpg', '.jpeg', '.dcm', '.dicom', '.nii', '.nii.gz', '.zip'];
 const accepte = (n: string) => ACCEPTE.some((e) => n.toLowerCase().endsWith(e));
@@ -70,7 +70,7 @@ function Formulaire() {
   const router = useRouter();
   const toast = useToast();
   const { user } = useAuth();
-  const medecin = user?.role === 'MEDECIN';
+  const radio = user?.role === 'RADIOLOGUE';
   const patientId = useSearchParams().get('patient') || '';
   const [patient, setPatient] = useState<Patient | null>(null);
   // Rien de présélectionné : le type et la région doivent être choisis consciemment pour chaque examen
@@ -78,6 +78,8 @@ function Formulaire() {
   const [modalite, setModalite] = useState('');
   const [indication, setIndication] = useState('');
   const [question, setQuestion] = useState('');
+  const [prescripteurs, setPrescripteurs] = useState<Prescripteur[] | null>(null);
+  const [prescripteurId, setPrescripteurId] = useState('');
   const [fichiers, setFichiers] = useState<File[]>([]);
   const [survol, setSurvol] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -88,7 +90,11 @@ function Formulaire() {
   const images = fichiers.flatMap((f, i) => (urls[i] ? [{ url: urls[i]!, nom: f.name, i }] : []));
 
   // Le moteur IA démarre pendant que la fiche est remplie : l'analyse commencera « à chaud »
-  useEffect(() => { api('/ai/warmup', { method: 'POST' }).catch(() => {}); }, []);
+  useEffect(() => {
+    if (!radio) return;
+    api('/ai/warmup', { method: 'POST' }).catch(() => {});
+    api<Prescripteur[]>('/exams/prescripteurs').then(setPrescripteurs).catch(() => setPrescripteurs([]));
+  }, [radio]);
 
   useEffect(() => {
     if (patientId) api<Patient>(`/patients/${patientId}`).then(setPatient).catch((e) => setErreur(e.message));
@@ -107,19 +113,25 @@ function Formulaire() {
   async function soumettre(e: FormEvent) {
     e.preventDefault();
     if (!modalite || !region) { setErreur('Choisissez le type d’examen et la région examinée.'); return; }
+    if (!prescripteurId) { setErreur('Indiquez le médecin prescripteur : c’est lui qui recevra le compte rendu.'); return; }
     setErreur(''); setProgression(0);
     const fd = new FormData();
     fd.append('patientId', patientId);
     fd.append('region', region);
     fd.append('modalite', modalite);
+    fd.append('prescripteurId', prescripteurId);
     if (indication.trim()) fd.append('indication', indication.trim());
     if (question.trim()) fd.append('question', question.trim());
     fichiers.forEach((f) => fd.append('fichiers', f, f.name));
     try {
       const r = await envoyer<{ id: string }>('/exams', fd, setProgression);
-      toast('ok', medecin ? 'Examen envoyé au service d’imagerie.' : 'Images envoyées. L’IA commence l’analyse.');
+      toast('ok', 'Images envoyées. L’IA commence l’analyse.');
       router.replace(`/examens/${r.id}`);
     } catch (err) { setErreur((err as Error).message); setProgression(null); }
+  }
+
+  if (user && !radio) {
+    return <Alerte genre="info">Seul le radiologue enregistre les examens et dépose les images. Vous recevrez le compte rendu dès qu’il l’aura validé.</Alerte>;
   }
 
   if (!patientId) {
@@ -141,7 +153,7 @@ function Formulaire() {
           <h1>Nouvel examen</h1>
           <p className="sous">{patient ? `${patient.nom} ${patient.prenom} · dossier ${patient.numeroDossier}` : <Squelette l={240} />}</p>
         </div>
-        {!medecin && <EtatIA />}
+        <EtatIA />
       </div>
       <form onSubmit={soumettre} className="pile" style={{ maxWidth: 820 }}>
         {erreur && <Alerte genre="erreur">{erreur}</Alerte>}
@@ -149,6 +161,14 @@ function Formulaire() {
         <section className="panneau">
           <div className="panneau-titre"><h2><span className="etape-num">1</span>Décrivez l’examen</h2></div>
           <div className="panneau-corps pile">
+            <div className="champ">
+              <label htmlFor="presc">Médecin prescripteur <span className="requis">*</span></label>
+              <select id="presc" value={prescripteurId} onChange={(e) => setPrescripteurId(e.target.value)} disabled={!prescripteurs?.length}>
+                <option value="">{prescripteurs === null ? 'Chargement…' : prescripteurs.length ? 'Choisir le médecin qui a demandé l’examen' : 'Aucun compte médecin actif'}</option>
+                {prescripteurs?.map((m) => <option key={m.id} value={m.id}>Dr {m.nom} {m.prenom}{m.service ? ` · ${m.service}` : ''}</option>)}
+              </select>
+              <span className="aide">Le compte rendu validé ne sera visible que par ce médecin.</span>
+            </div>
             <div className="champ">
               <span className="etiquette">Type d’examen <span className="requis">*</span></span>
               <div className="choix" role="group" aria-label="Type d’examen">
@@ -160,14 +180,14 @@ function Formulaire() {
               <div className="choix" role="group" aria-label="Région examinée">
                 {REGIONS.map((r) => <button type="button" key={r.valeur} aria-pressed={region === r.valeur} onClick={() => setRegion(r.valeur)}>{r.libelle}</button>)}
               </div>
-              {!medecin && <span className="aide">L’IA ne recherche que les anomalies propres à cette région.</span>}
+              <span className="aide">L’IA ne recherche que les anomalies propres à cette région.</span>
             </div>
             <div className="champ">
               <label htmlFor="ind">Indication clinique <span className="facultatif">(recommandé)</span></label>
               <textarea id="ind" rows={2} maxLength={1000} placeholder="Ex. toux fébrile depuis 5 jours, dyspnée" value={indication} onChange={(e) => setIndication(e.target.value)} />
             </div>
             <div className="champ">
-              <label htmlFor="q">{medecin ? 'Question pour le radiologue' : 'Question précise pour l’IA'} <span className="facultatif">(facultatif)</span></label>
+              <label htmlFor="q">Question précise pour l’IA <span className="facultatif">(facultatif)</span></label>
               <input id="q" type="text" maxLength={500} placeholder="Ex. y a-t-il un épanchement pleural ?" value={question} onChange={(e) => setQuestion(e.target.value)} />
             </div>
           </div>
@@ -224,7 +244,7 @@ function Formulaire() {
         </section>
 
         <section className="panneau">
-          <div className="panneau-titre"><h2><span className="etape-num">3</span>{medecin ? 'Envoyez l’examen' : 'Lancez l’analyse'}</h2></div>
+          <div className="panneau-titre"><h2><span className="etape-num">3</span>Lancez l’analyse</h2></div>
           <div className="panneau-corps pile">
             {envoi ? (
               <div aria-live="polite">
@@ -238,16 +258,15 @@ function Formulaire() {
               </div>
             ) : (
               <p className="aide" style={{ fontSize: 14 }}>
-                {medecin
-                  ? 'L’examen part au service d’imagerie. Dès que le radiologue aura validé son compte rendu, il apparaîtra dans la liste de vos examens.'
-                  : 'L’IA rédige un pré-rapport, généralement en quelques minutes. Vous pouvez quitter la page pendant l’analyse : le compte rendu apparaîtra dans la liste des examens.'}
+                L’IA rédige un pré-rapport, généralement en quelques minutes. Vous pouvez quitter la page pendant l’analyse : le compte rendu apparaîtra dans la liste des examens.
               </p>
             )}
             <div className="ligne">
-              <Bouton className="btn btn-principal" icone={medecin ? 'envoi' : 'etincelle'} chargement={envoi} disabled={!fichiers.length || !patient || !modalite || !region}>
+              <Bouton className="btn btn-principal" icone="etincelle" chargement={envoi} disabled={!fichiers.length || !patient || !modalite || !region || !prescripteurId}>
                 {envoi ? 'Envoi en cours…' : !modalite || !region ? 'Choisissez le type d’examen et la région'
+                  : !prescripteurId ? 'Choisissez le médecin prescripteur'
                   : !fichiers.length ? 'Ajoutez au moins une image'
-                  : `${medecin ? 'Envoyer au radiologue' : 'Lancer l’analyse'} (${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''})`}
+                  : `Lancer l’analyse (${fichiers.length} fichier${fichiers.length > 1 ? 's' : ''})`}
               </Bouton>
               {patient && !envoi && <Link href={`/patients/${patient.id}`} className="btn btn-fantome">Annuler</Link>}
             </div>

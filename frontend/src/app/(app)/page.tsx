@@ -53,7 +53,7 @@ export default function TableauDeBord() {
     ? 'Gérez les accès à MedVision et suivez l’activité du service.'
     : radio
       ? stats ? (stats.aValider ? `${pluriel(stats.aValider, 'compte rendu attend', 'comptes rendus attendent')} votre validation.` : 'Aucun compte rendu en attente. Tout est à jour.') : ' '
-      : 'Ouvrez un dossier patient pour envoyer un examen au service d’imagerie.';
+      : 'Retrouvez ici les comptes rendus validés des examens que vous avez prescrits.';
 
   return (
     <>
@@ -65,7 +65,7 @@ export default function TableauDeBord() {
         </div>
         <div className="ligne">
           {!medecin && <EtatIA />}
-          {medecin && <Link href="/patients" className="btn btn-principal"><Icone nom="plus" />Nouvel examen</Link>}
+          {medecin && <Link href="/examens?statut=VALIDE" className="btn btn-principal"><Icone nom="check-cercle" />Voir les comptes rendus</Link>}
           {radio && !!stats?.aValider && <Link href="/examens?statut=A_VALIDER" className="btn btn-principal"><Icone nom="check-cercle" />Commencer la validation</Link>}
           {admin && <Link href="/admin/utilisateurs" className="btn btn-principal"><Icone nom="utilisateur-plus" />Gérer les comptes</Link>}
         </div>
@@ -103,8 +103,8 @@ export default function TableauDeBord() {
           {examens === null ? <SqueletteTableau lignes={4} /> : examens.length === 0 ? (
             radio
               ? <EtatVide icone="check-cercle" titre="Tout est à jour">Aucun compte rendu n’attend votre validation. Les nouveaux examens apparaîtront ici dès leur analyse terminée.</EtatVide>
-              : <EtatVide icone="examens" titre="Aucun examen pour le moment" action={<Link href="/patients" className="btn btn-principal"><Icone nom="patients" />Choisir un patient</Link>}>
-                  Choisissez un patient et déposez ses images : le radiologue vous transmettra son compte rendu.
+              : <EtatVide icone="examens" titre="Aucun examen pour le moment">
+                  Dès que le service d’imagerie aura enregistré un examen que vous avez prescrit, il apparaîtra ici avec son statut.
                 </EtatVide>
           ) : <ListeExamens examens={examens.slice(0, 10)} />}
         </section>

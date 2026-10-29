@@ -13,8 +13,8 @@ import type { Role, Utilisateur } from '@/lib/types';
 
 const ROLES: Role[] = ['MEDECIN', 'RADIOLOGUE', 'ADMIN'];
 const DESCRIPTION_ROLE: Record<Role, string> = {
-  MEDECIN: 'Crée les dossiers patients, envoie les images et lit les comptes rendus validés.',
-  RADIOLOGUE: 'Relit, corrige et valide les comptes rendus proposés par l’IA.',
+  MEDECIN: 'Consulte les comptes rendus validés des examens qu’il a prescrits.',
+  RADIOLOGUE: 'Enregistre les patients et les examens, dépose les images, puis relit, corrige et valide le compte rendu rédigé par l’IA.',
   ADMIN: 'Gère les comptes et consulte le journal d’activité. N’a pas accès aux dossiers médicaux.',
 };
 const VIERGE = { prenom: '', nom: '', email: '', role: 'MEDECIN' as Role, service: '' };

@@ -36,10 +36,14 @@ export class ExamsService implements OnApplicationBootstrap {
   async trouver(id: string, user: User): Promise<Exam> {
     const e = await this.exams.findOne({
       where: { id },
-      relations: { patient: true, images: true, rapport: true, demandePar: true },
+      relations: { patient: true, images: true, rapport: true, demandePar: true, envoyePar: true },
     });
     if (!e) throw new NotFoundException('Examen introuvable');
-    if (user.role === Role.MEDECIN && e.statut !== ExamStatus.VALIDE) e.rapport = null;
+    if (user.role === Role.MEDECIN) {
+      // un médecin ne consulte que les examens qu'il a prescrits, et le rapport seulement une fois validé
+      if (e.demandePar?.id !== user.id) throw new NotFoundException('Examen introuvable');
+      if (e.statut !== ExamStatus.VALIDE) e.rapport = null;
+    }
     return e;
   }
 

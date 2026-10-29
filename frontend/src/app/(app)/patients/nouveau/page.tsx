@@ -6,6 +6,7 @@ import { Icone } from '@/components/Icone';
 import { useToast } from '@/components/Toasts';
 import { Alerte, Bouton } from '@/components/ui';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import type { Patient } from '@/lib/types';
 
 export default function NouveauPatient() {
@@ -16,6 +17,8 @@ export default function NouveauPatient() {
   const [envoi, setEnvoi] = useState(false);
   const maj = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
 
+  const { user } = useAuth();
+
   async function soumettre(e: FormEvent) {
     e.preventDefault();
     setErreur(''); setEnvoi(true);
@@ -25,6 +28,10 @@ export default function NouveauPatient() {
       toast('ok', `Dossier ${p.numeroDossier} créé pour ${p.prenom} ${p.nom}.`);
       router.replace(`/patients/${p.id}`);
     } catch (err) { setErreur((err as Error).message); setEnvoi(false); }
+  }
+
+  if (user && user.role !== 'RADIOLOGUE') {
+    return <Alerte genre="info">Les dossiers patients sont créés par le service d’imagerie, au moment d’enregistrer l’examen.</Alerte>;
   }
 
   return (

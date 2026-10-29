@@ -19,7 +19,10 @@ export class Exam {
   @Column({ type: 'text', nullable: true }) question?: string | null;
   @Column({ type: 'enum', enum: ExamStatus, default: ExamStatus.EN_ATTENTE }) statut!: ExamStatus;
   @Column({ type: 'text', nullable: true }) erreur?: string | null;
+  /** Médecin prescripteur : seul destinataire du compte rendu validé */
   @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' }) demandePar?: User | null;
+  /** Radiologue qui a enregistré l'examen et déposé les images */
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' }) envoyePar?: User | null;
   @OneToMany(() => ExamImage, (i) => i.examen, { cascade: true }) images?: ExamImage[];
   @OneToOne(() => Report, (r) => r.examen) rapport?: Report | null;
   @CreateDateColumn({ type: 'timestamptz' }) creeLe!: Date;

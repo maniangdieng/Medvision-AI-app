@@ -22,14 +22,17 @@ export class PatientsController {
   constructor(@InjectRepository(Patient) private readonly patients: Repository<Patient>, private readonly audit: AuditService) {}
 
   @Get()
-  async liste(@Query('q') q = '', @Query('page') page = '1') {
+  async liste(@CurrentUser() user: User, @Query('q') q = '', @Query('page') page = '1') {
     const p = Math.max(1, parseInt(page, 10) || 1);
+    const medecin = user.role === Role.MEDECIN;
     const qb = this.patients.createQueryBuilder('p')
-      .loadRelationCountAndMap('p.nbExamens', 'p.examens')
+      .loadRelationCountAndMap('p.nbExamens', 'p.examens', 'e', (s) => (medecin ? s.where('e.demandePar = :id', { id: user.id }) : s))
       .orderBy('p.creeLe', 'DESC').skip((p - 1) * 20).take(20);
+    // un médecin ne voit que les patients pour lesquels il a prescrit un examen
+    if (medecin) qb.where('EXISTS (SELECT 1 FROM examens x WHERE x."patientId" = p.id AND x."demandeParId" = :id)', { id: user.id });
     const terme = q.trim();
     if (terme) {
-      qb.where(new Brackets((w) => {
+      qb.andWhere(new Brackets((w) => {
         w.where('p.nom ILIKE :t', { t: `%${terme}%` })
           .orWhere('p.prenom ILIKE :t', { t: `%${terme}%` })
           .orWhere('p.numeroDossier ILIKE :t', { t: `%${terme}%` });
@@ -47,15 +50,18 @@ export class PatientsController {
       order: { examens: { creeLe: 'DESC' } },
     });
     if (!p) throw new NotFoundException('Patient introuvable');
-    // Un médecin ne voit le rapport qu'une fois validé par un radiologue
+    // Un médecin ne voit que ses propres demandes, et le rapport seulement une fois validé par un radiologue
     if (user.role === Role.MEDECIN) {
-      for (const e of p.examens ?? []) if (e.statut !== ExamStatus.VALIDE) e.rapport = null;
+      p.examens = (p.examens ?? []).filter((e) => e.demandePar?.id === user.id);
+      if (!p.examens.length) throw new NotFoundException('Patient introuvable');
+      for (const e of p.examens) if (e.statut !== ExamStatus.VALIDE) e.rapport = null;
     }
     await this.audit.log('DOSSIER_CONSULTE', { user, entite: 'patient', entiteId: id, ip: clientIp(req) });
     return p;
   }
 
   @Post()
+  @Roles(Role.RADIOLOGUE)
   async creer(@Body() dto: CreatePatientDto, @CurrentUser() user: User, @Req() req: Request) {
     const annee = new Date().getFullYear();
     const n = await this.patients.count();

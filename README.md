@@ -1,6 +1,6 @@
 # MedVision — Aide au compte rendu radiologique
 
-Application web d'aide au compte rendu radiologique. Les médecins envoient les images, l'IA (BioMedCLIP + MedGemma 4B) rédige un compte rendu au format RSNA, et un radiologue le relit, le corrige puis le valide avant qu'il devienne visible.
+Application web d'aide au compte rendu radiologique. Le radiologue dépose les images, l'IA (BioMedCLIP + MedGemma 4B) rédige un compte rendu au format RSNA, puis le radiologue le relit, le corrige et le valide. Le médecin prescripteur consulte ensuite le compte rendu validé.
 
 ## Architecture
 
@@ -33,8 +33,8 @@ Le service IA ne stocke rien : il reçoit des images, renvoie un texte et oublie
 
 | Rôle | Peut faire |
 |---|---|
-| **Médecin** | créer un dossier patient, envoyer des images, lire les comptes rendus **validés** |
-| **Radiologue** | tout ce que fait le médecin, plus relire, corriger, régénérer et **valider** les comptes rendus |
+| **Médecin** | consulter les comptes rendus **validés** des examens qu'il a prescrits (lecture seule) |
+| **Radiologue** | créer les dossiers patients, enregistrer l'examen (avec le médecin prescripteur), déposer les images, puis relire, corriger, régénérer et **valider** le compte rendu rédigé par l'IA |
 | **Administrateur** | créer, désactiver et réinitialiser les comptes, consulter le journal d'activité. **N'a pas accès aux dossiers médicaux.** |
 
 Un compte rendu validé ne peut plus être modifié. Le texte brut de l'IA reste conservé à côté de la version corrigée, pour la traçabilité.

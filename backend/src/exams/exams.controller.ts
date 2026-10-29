@@ -31,6 +31,7 @@ class CreateExamDto {
   @IsIn(MODALITES) modalite!: string;
   @IsOptional() @IsString() @MaxLength(1000) indication?: string;
   @IsOptional() @IsString() @MaxLength(500) question?: string;
+  @IsUUID() prescripteurId!: string;
 }
 
 class UpdateReportDto {
@@ -46,6 +47,7 @@ export class ExamsController {
     private readonly audit: AuditService,
     @InjectRepository(Exam) private readonly exams: Repository<Exam>,
     @InjectRepository(Patient) private readonly patients: Repository<Patient>,
+    @InjectRepository(User) private readonly users: Repository<User>,
   ) {}
 
   @Get('options')
@@ -53,12 +55,26 @@ export class ExamsController {
     return { regions: REGIONS, modalites: MODALITES, extensions: EXTENSIONS };
   }
 
+  /** Médecins actifs, pour désigner le prescripteur à qui le compte rendu sera transmis. */
+  @Get('prescripteurs')
+  @Roles(Role.RADIOLOGUE)
+  prescripteurs() {
+    return this.users.find({
+      where: { role: Role.MEDECIN, actif: true },
+      select: { id: true, prenom: true, nom: true, service: true },
+      order: { nom: 'ASC', prenom: 'ASC' },
+    });
+  }
+
   @Get()
-  async liste(@Query('statut') statut?: string, @Query('page') page = '1') {
+  async liste(@CurrentUser() user: User, @Query('statut') statut?: string, @Query('page') page = '1') {
     const p = Math.max(1, parseInt(page, 10) || 1);
     const statuts = (statut || '').split(',').filter((s) => (Object.values(ExamStatus) as string[]).includes(s)) as ExamStatus[];
     const [items, total] = await this.exams.findAndCount({
-      where: statuts.length ? { statut: In(statuts) } : {},
+      where: {
+        ...(statuts.length ? { statut: In(statuts) } : {}),
+        ...(user.role === Role.MEDECIN ? { demandePar: { id: user.id } } : {}),
+      },
       relations: { patient: true, demandePar: true },
       order: { creeLe: 'DESC' },
       skip: (p - 1) * 20,
@@ -68,6 +84,7 @@ export class ExamsController {
   }
 
   @Post()
+  @Roles(Role.RADIOLOGUE) // le radiologue dépose les images ; le médecin ne fait que lire le compte rendu
   @UseInterceptors(FilesInterceptor('fichiers', 20, {
     storage: diskStorage({
       destination: (_req, _f, cb) => cb(null, dossierUploads()),
@@ -86,10 +103,13 @@ export class ExamsController {
     @Req() req: Request,
   ) {
     if (!fichiers?.length) throw new BadRequestException('Ajoutez au moins une image');
-    const patient = await this.patients.findOneBy({ id: dto.patientId });
-    if (!patient) {
+    const [patient, prescripteur] = await Promise.all([
+      this.patients.findOneBy({ id: dto.patientId }),
+      this.users.findOneBy({ id: dto.prescripteurId, role: Role.MEDECIN, actif: true }),
+    ]);
+    if (!patient || !prescripteur) {
       await this.service.supprimerFichiers(fichiers.map((f) => f.filename));
-      throw new BadRequestException('Patient introuvable');
+      throw new BadRequestException(patient ? 'Médecin prescripteur introuvable' : 'Patient introuvable');
     }
     const exam = await this.exams.save(this.exams.create({
       patient,
@@ -97,7 +117,8 @@ export class ExamsController {
       modalite: dto.modalite,
       indication: dto.indication?.trim() || null,
       question: dto.question?.trim() || null,
-      demandePar: { id: user.id } as User,
+      demandePar: { id: prescripteur.id } as User,
+      envoyePar: { id: user.id } as User,
       images: fichiers.map((f) => {
         const ext = extension(f.originalname);
         return {
@@ -110,7 +131,8 @@ export class ExamsController {
       }),
     }));
     await this.audit.log('EXAMEN_CREE', { user, entite: 'examen', entiteId: exam.id,
-      details: `${patient.numeroDossier} · ${dto.modalite} ${dto.region} · ${fichiers.length} fichier(s)`, ip: clientIp(req) });
+      details: `${patient.numeroDossier} · ${dto.modalite} ${dto.region} · ${fichiers.length} fichier(s) · pour Dr ${prescripteur.prenom} ${prescripteur.nom}`,
+      ip: clientIp(req) });
     this.service.planifierAnalyse(exam.id, user);
     return { id: exam.id };
   }
@@ -143,8 +165,10 @@ export class ExamsController {
   async image(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('imageId', ParseUUIDPipe) imageId: string,
+    @CurrentUser() user: User,
     @Res() res: Response,
   ) {
+    await this.service.trouver(id, user); // un médecin ne voit que les images de ses propres demandes
     const img = await this.service.cheminImage(id, imageId);
     res.setHeader('Content-Type', img.typeMime);
     res.setHeader('Cache-Control', 'private, max-age=3600');

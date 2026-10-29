@@ -6,6 +6,7 @@ import { Icone, NomIcone } from '@/components/Icone';
 import { Statut } from '@/components/Statut';
 import { Alerte, Avatar, EtatVide, Squelette, SqueletteTableau } from '@/components/ui';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { age, date, dateHeure, libelleRegion } from '@/lib/format';
 import type { Patient } from '@/lib/types';
 
@@ -16,6 +17,7 @@ function Info({ icone, titre, valeur }: { icone: NomIcone; titre: string; valeur
 export default function FichePatient() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const radio = useAuth().user?.role === 'RADIOLOGUE';
   const [p, setP] = useState<Patient | null>(null);
   const [erreur, setErreur] = useState('');
 
@@ -33,7 +35,7 @@ export default function FichePatient() {
             {p ? <h1>{p.nom} {p.prenom}</h1> : <Squelette l={220} h={28} />}
             {p ? <span className="puce-dossier"><Icone nom="dossier" taille={13} />{p.numeroDossier}</span> : <div style={{ marginTop: 8 }}><Squelette l={110} /></div>}
           </div>
-          {p && <Link href={`/examens/nouveau?patient=${p.id}`} className="btn btn-principal"><Icone nom="plus" />Nouvel examen</Link>}
+          {p && radio && <Link href={`/examens/nouveau?patient=${p.id}`} className="btn btn-principal"><Icone nom="plus" />Nouvel examen</Link>}
         </div>
         <dl className="fiche">
           <Info icone="horloge" titre="Âge" valeur={p ? age(p.dateNaissance) || '—' : '…'} />
@@ -48,11 +50,11 @@ export default function FichePatient() {
         {!p ? <SqueletteTableau lignes={3} /> : !p.examens?.length ? (
           <EtatVide icone="examens" titre="Aucun examen pour ce patient"
             action={<Link href={`/examens/nouveau?patient=${p.id}`} className="btn btn-principal"><Icone nom="envoi" />Ajouter des images</Link>}>
-            Déposez une radiographie, un scanner ou une IRM : le radiologue vous transmettra son compte rendu.
+            Déposez une radiographie, un scanner ou une IRM : l’IA rédigera un pré-rapport que vous relirez et validerez.
           </EtatVide>
         ) : (
           <div className="defile"><table className="tableau">
-            <thead><tr><th>Date</th><th>Examen</th><th className="masquable">Demandé par</th><th>Statut</th><th aria-hidden="true" /></tr></thead>
+            <thead><tr><th>Date</th><th>Examen</th><th className="masquable">Prescrit par</th><th>Statut</th><th aria-hidden="true" /></tr></thead>
             <tbody>
               {p.examens.map((e) => (
                 <tr key={e.id} className="cliquable" onClick={() => router.push(`/examens/${e.id}`)}>

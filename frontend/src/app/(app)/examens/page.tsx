@@ -61,7 +61,7 @@ function Liste() {
           <h1>Examens</h1>
           <p className="sous">{res ? pluriel(res.total, 'examen', 'examens') : ' '} · pour un nouvel examen, ouvrez d’abord le dossier du patient.</p>
         </div>
-        <Link href="/patients" className={`btn${user?.role === 'MEDECIN' ? ' btn-principal' : ''}`}><Icone nom="plus" />Nouvel examen</Link>
+        {user?.role === 'RADIOLOGUE' && <Link href="/patients" className="btn"><Icone nom="plus" />Nouvel examen</Link>}
       </div>
       <div className="choix" role="group" aria-label="Filtrer par statut" style={{ marginBottom: 18 }}>
         {(user?.role === 'MEDECIN' ? FILTRES_MEDECIN : FILTRES).map((f) => (

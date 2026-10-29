@@ -2,7 +2,7 @@ import { Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThanOrEqual, Repository } from 'typeorm';
 import { AiService } from '../ai/ai.service';
-import { Public, Roles } from '../common/decorators';
+import { CurrentUser, Public, Roles } from '../common/decorators';
 import { Exam, ExamStatus, Patient, Role, User } from '../entities';
 
 @Controller()
@@ -26,7 +26,7 @@ export class StatsController {
   }
 
   @Post('ai/warmup')
-  @Roles(Role.MEDECIN, Role.RADIOLOGUE)
+  @Roles(Role.RADIOLOGUE)
   @HttpCode(202)
   aiWarmup() {
     void this.ai.prechauffer(); // on répond tout de suite : le préchauffage continue en arrière-plan
@@ -34,16 +34,21 @@ export class StatsController {
   }
 
   @Get('stats')
-  async stats() {
+  async stats(@CurrentUser() user: User) {
     const debutJour = new Date();
     debutJour.setHours(0, 0, 0, 0);
+    // un médecin ne compte que les examens qu'il a prescrits
+    const mien = user.role === Role.MEDECIN ? { demandePar: { id: user.id } } : {};
     const [patients, examensJour, aValider, enCours, echecs, valides, utilisateurs] = await Promise.all([
-      this.patients.count(),
-      this.exams.count({ where: { creeLe: MoreThanOrEqual(debutJour) } }),
-      this.exams.count({ where: { statut: ExamStatus.A_VALIDER } }),
-      this.exams.count({ where: [{ statut: ExamStatus.ANALYSE_EN_COURS }, { statut: ExamStatus.EN_ATTENTE }] }),
-      this.exams.count({ where: { statut: ExamStatus.ECHEC } }),
-      this.exams.count({ where: { statut: ExamStatus.VALIDE } }),
+      user.role === Role.MEDECIN
+        ? this.patients.createQueryBuilder('p')
+          .where('EXISTS (SELECT 1 FROM examens x WHERE x."patientId" = p.id AND x."demandeParId" = :id)', { id: user.id }).getCount()
+        : this.patients.count(),
+      this.exams.count({ where: { ...mien, creeLe: MoreThanOrEqual(debutJour) } }),
+      this.exams.count({ where: { ...mien, statut: ExamStatus.A_VALIDER } }),
+      this.exams.count({ where: [{ ...mien, statut: ExamStatus.ANALYSE_EN_COURS }, { ...mien, statut: ExamStatus.EN_ATTENTE }] }),
+      this.exams.count({ where: { ...mien, statut: ExamStatus.ECHEC } }),
+      this.exams.count({ where: { ...mien, statut: ExamStatus.VALIDE } }),
       this.users.count({ where: { actif: true } }),
     ]);
     return { patients, examensJour, aValider, enCours, echecs, valides, utilisateurs };

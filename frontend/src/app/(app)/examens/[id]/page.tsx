@@ -184,7 +184,7 @@ export default function PageExamen() {
   const valider = async () => {
     if (!(await confirmer({
       titre: 'Valider ce compte rendu ?',
-      message: 'Il ne pourra plus être modifié et deviendra visible par le médecin demandeur.',
+      message: 'Il ne pourra plus être modifié et deviendra visible par le médecin prescripteur.',
       confirmer: 'Valider',
     }))) return;
     action('valider', () => api(`/exams/${id}/rapport/valider`, { method: 'POST' }), 'Compte rendu validé et transmis au médecin.');
@@ -245,7 +245,7 @@ export default function PageExamen() {
 
           {medecin && e.statut !== 'VALIDE' && (
             <Alerte genre="info">
-              <strong>Examen transmis au service d’imagerie.</strong> Le compte rendu du radiologue apparaîtra ici dès qu’il l’aura validé. Cette page se met à jour toute seule.
+              <strong>Examen en cours d’interprétation au service d’imagerie.</strong> Le compte rendu du radiologue apparaîtra ici dès qu’il l’aura validé. Cette page se met à jour toute seule.
             </Alerte>
           )}
 
@@ -253,7 +253,10 @@ export default function PageExamen() {
             <div className="panneau panneau-corps pile" style={{ gap: 10 }}>
               {e.indication && <p><strong>Indication :</strong> {e.indication}</p>}
               {e.question && <p><strong>Question posée :</strong> {e.question}</p>}
-              <p className="aide">Demandé le {dateHeure(e.creeLe)}{e.demandePar ? ` par Dr ${e.demandePar.prenom} ${e.demandePar.nom}` : ''}</p>
+              <p className="aide">
+                Prescrit par {e.demandePar ? `Dr ${e.demandePar.prenom} ${e.demandePar.nom}` : '—'}
+                {' · '}images déposées le {dateHeure(e.creeLe)}{e.envoyePar ? ` par Dr ${e.envoyePar.prenom} ${e.envoyePar.nom}` : ''}
+              </p>
             </div>
           )}
 

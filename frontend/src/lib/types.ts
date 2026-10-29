@@ -18,7 +18,10 @@ export interface Rapport {
 export interface ImageExamen { id: string; nomOriginal: string; typeMime: string; taille: number; apercu: boolean }
 export interface Examen {
   id: string; patient: Patient; region: string; modalite: string; indication?: string | null;
-  question?: string | null; statut: Statut; erreur?: string | null; demandePar?: Utilisateur | null;
+  question?: string | null; statut: Statut; erreur?: string | null;
+  /** Médecin prescripteur, destinataire du compte rendu ; envoyePar = radiologue qui a déposé les images */
+  demandePar?: Utilisateur | null; envoyePar?: Utilisateur | null;
   images?: ImageExamen[]; rapport?: Rapport | null; creeLe: string; modifieLe: string;
 }
-export interface Page<T> { items: T[]; total: number; page: number }
+export type Prescripteur = Pick<Utilisateur, 'id' | 'prenom' | 'nom' | 'service'>;
+export interface Page<T>{ items: T[]; total: number; page: number }

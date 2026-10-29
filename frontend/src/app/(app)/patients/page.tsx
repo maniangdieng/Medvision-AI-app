@@ -5,11 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Icone } from '@/components/Icone';
 import { Avatar, EtatVide, Spinner, SqueletteTableau } from '@/components/ui';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { age, date, pluriel } from '@/lib/format';
 import type { Page, Patient } from '@/lib/types';
 
 export default function Patients() {
   const router = useRouter();
+  const radio = useAuth().user?.role === 'RADIOLOGUE';
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [res, setRes] = useState<Page<Patient> | null>(null);
@@ -38,8 +40,8 @@ export default function Patients() {
   return (
     <>
       <div className="entete">
-        <div><h1>Patients</h1><p className="sous">{res ? `${pluriel(res.total, 'dossier', 'dossiers')} · recherchez un dossier ou créez-en un nouveau.` : ' '}</p></div>
-        <Link href="/patients/nouveau" className="btn btn-principal"><Icone nom="utilisateur-plus" />Nouveau patient</Link>
+        <div><h1>Patients</h1><p className="sous">{res ? `${pluriel(res.total, 'dossier', 'dossiers')} · ${radio ? 'recherchez un dossier ou créez-en un nouveau.' : 'patients pour lesquels vous avez prescrit un examen.'}` : ' '}</p></div>
+        {radio && <Link href="/patients/nouveau" className="btn btn-principal"><Icone nom="utilisateur-plus" />Nouveau patient</Link>}
       </div>
       <div className="recherche" style={{ marginBottom: 18, maxWidth: 560 }}>
         <Icone nom="recherche" />
@@ -51,11 +53,15 @@ export default function Patients() {
       <section className="panneau">
         {!res ? <SqueletteTableau colonnes={5} /> : res.items.length === 0 ? (
           q
-            ? <EtatVide icone="recherche" titre={`Aucun patient ne correspond à « ${q} »`} action={<Link href="/patients/nouveau" className="btn btn-principal"><Icone nom="plus" />Créer le dossier</Link>}>
+            ? <EtatVide icone="recherche" titre={`Aucun patient ne correspond à « ${q} »`} action={radio ? <Link href="/patients/nouveau" className="btn btn-principal"><Icone nom="plus" />Créer le dossier</Link> : undefined}>
                 Vérifiez l’orthographe ou cherchez par numéro de dossier.
               </EtatVide>
-            : <EtatVide icone="patients" titre="Aucun patient enregistré" action={<Link href="/patients/nouveau" className="btn btn-principal"><Icone nom="plus" />Créer le premier dossier</Link>}>
+            : radio
+              ? <EtatVide icone="patients" titre="Aucun patient enregistré" action={<Link href="/patients/nouveau" className="btn btn-principal"><Icone nom="plus" />Créer le premier dossier</Link>}>
                 Créez un dossier patient pour pouvoir lui associer des examens d’imagerie.
+              </EtatVide>
+              : <EtatVide icone="patients" titre="Aucun patient pour le moment">
+                Vos patients apparaîtront ici dès que le service d’imagerie aura enregistré un examen que vous avez prescrit.
               </EtatVide>
         ) : (
           <div className="defile"><table className="tableau">
